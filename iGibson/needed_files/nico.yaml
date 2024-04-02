@@ -1,0 +1,16 @@
+# Example Fetch config
+robot:
+  name: Nico
+  action_type: continuous
+  action_normalize: true
+  reset_joint_pos: null
+  base_name: null
+  scale: 1.0
+  self_collision: false
+  rendering_params: null
+  grasping_mode: physical
+  controller_config:
+    arm_0:
+      name: InverseKinematicsController
+    gripper_0:
+      name: NullGripperController
