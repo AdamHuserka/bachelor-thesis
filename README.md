@@ -12,3 +12,5 @@ we are using the nico_upper_head_rh6d_dual.urdf file, meshes are only in the .ST
 You can use for example https://imagetostl.com/convert/file/stl/to/obj.
 
 Meshes need to be also in the .OBJ format as iGibson cannot parse shapes from the .STL format.
+
+Testing scripts can be found in the testing_scripts directory.
