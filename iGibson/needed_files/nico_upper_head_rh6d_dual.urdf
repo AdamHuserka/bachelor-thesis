@@ -270,20 +270,20 @@
 		<axis xyz="0 1 0"/>
 		<limit effort="30" lower="-.78" upper="0.78" velocity="1"/>
 	</joint>
-	<!--link name="endeffector">
+	<!--link name="endeffector"> NOT ALLOWED
     	<visual>
       		<origin rpy="0 0 0" xyz="0 0.0 0.0"/>
       		<geometry>
         		<sphere radius="0.01"/>
       		</geometry>
     	</visual>
-  	</link>
-	<joint name="endeffector_joint" type="fixed">
+  	</link-->
+	<!--joint name="endeffector_joint" type="fixed">
     	<parent link="gripper"/>
     	<child link="endeffector"/>
     	<origin rpy="0 0 0" xyz="0.00 -0.02 -0.11"/>
 	</joint-->
-	<!--link name="middlefinger">
+	<link name="middlefinger">
 		<visual>
 			<geometry>
 				<mesh filename="mesh/finger.obj"/>
@@ -304,8 +304,8 @@
 			<inertia ixx="0" ixy="0" ixz="-0" iyy="0" iyz="0" izz="0"/>
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
-	</link-->
-	<!--link name="littlefinger">
+	</link>
+	<link name="littlefinger">
 		<visual>
 			<geometry>
 				<mesh filename="mesh/finger.obj"/>
@@ -326,7 +326,7 @@
 			<inertia ixx="0" ixy="0" ixz="-0" iyy="0" iyz="0" izz="0"/>
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
-	</link-->
+	</link>
 	<link name="gripper"> <!--indexfinder-->
 		<visual>
 			<geometry>
@@ -349,20 +349,20 @@
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
 	</link>
-	<!--joint name="middlefinger_rjoint" type="fixed">
-		<parent link="gripper"/>
+	<joint name="middlefinger_rjoint" type="revolute"> <!--joint for middlefinger-->
+		<parent link="right_palm"/>
 		<child link="middlefinger"/>
 		<origin rpy="0 0 0" xyz="0 0 -0.06"/>
 		<axis xyz="0 1 0"/>
 		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
-	</joint-->
-	<!--joint name="litlefinger_rjoint" type="fixed">
-		<parent link="gripper"/>
+	</joint>
+	<joint name="litlefinger_rjoint" type="revolute"> <!--joint for littlefinger-->
+		<parent link="right_palm"/>
 		<child link="littlefinger"/>
 		<origin rpy="0 0 0" xyz="0.00 0.02 -0.06"/>
 		<axis xyz="0 1 0"/>
 		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
-	</joint-->
+	</joint>
 	<joint name="gripper_rjoint" type="revolute">
 		<parent link="right_palm"/>
 		<child link="gripper"/>
@@ -377,6 +377,11 @@
         		<sphere radius="0.01"/>
       		</geometry>
     	</visual>
+		<inertial>
+			<mass value="0.000009"/>
+			<inertia ixx="0" ixy="0" ixz="-0" iyy="0" iyz="0" izz="0"/>
+			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
+		</inertial>
   	</link>
 	<joint name="endeffector_joint" type="fixed">
     	<parent link="gripper"/>
@@ -384,7 +389,7 @@
     	<origin rpy="0 0 0" xyz="0.00 -0.0 -0.05"/>
 	</joint>
     <!-- ====LEFT ARM=== -->
-    <link name="left_shoulder">
+    <link name="left_shoulder">	
 		<visual>
 			<geometry>
 				<mesh filename="mesh/left_shoulder.obj"/>
@@ -571,7 +576,7 @@
     	<child link="endeffector"/>
     	<origin rpy="0 0 0" xyz="0.00 -0.02 -0.11"/>
 	</joint-->
-	<!--link name="middlefinger">
+	<link name="middlefingel">
 		<visual>
 			<geometry>
 				<mesh filename="mesh/finger.obj"/>
@@ -592,8 +597,8 @@
 			<inertia ixx="0" ixy="0" ixz="-0" iyy="0" iyz="0" izz="0"/>
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
-	</link-->
-	<!--link name="littlefinger">
+	</link>
+	<link name="littlefingel">
 		<visual>
 			<geometry>
 				<mesh filename="mesh/finger.obj"/>
@@ -614,7 +619,7 @@
 			<inertia ixx="0" ixy="0" ixz="-0" iyy="0" iyz="0" izz="0"/>
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
-	</link-->
+	</link>
 	<link name="grippel"> <!--indexfinder-->
 		<visual>
 			<geometry>
@@ -637,20 +642,20 @@
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
 	</link>
-	<!--joint name="middlefinger_rjoint" type="fixed">
-		<parent link="gripper"/>
-		<child link="middlefinger"/>
+	<joint name="middlefingel_rjoint" type="revolute">
+		<parent link="left_palm"/>
+		<child link="middlefingel"/>
 		<origin rpy="0 0 0" xyz="0 0 -0.06"/>
 		<axis xyz="0 1 0"/>
-		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
-	</joint-->
-	<!--joint name="litlefinger_rjoint" type="fixed">
-		<parent link="gripper"/>
-		<child link="littlefinger"/>
+		<limit effort="30" lower="0" upper="2.57" velocity="1"/>
+	</joint>
+	<joint name="litlefingel_rjoint" type="revolute">
+		<parent link="left_palm"/>
+		<child link="littlefingel"/>
 		<origin rpy="0 0 0" xyz="0.00 0.02 -0.06"/>
 		<axis xyz="0 1 0"/>
-		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
-	</joint-->
+		<limit effort="30" lower="0" upper="2.57" velocity="1"/>
+	</joint>
 	<joint name="grippel_rjoint" type="revolute">
 		<parent link="left_palm"/>
 		<child link="grippel"/>

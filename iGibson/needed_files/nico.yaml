@@ -3,6 +3,19 @@ robot:
   name: Nico
   action_type: continuous
   action_normalize: true
+  proprio_obs:
+    - eef_left_pos
+    - eef_left_quat
+    - eef_right_pos
+    - eef_right_quat
+    - arm_left_qpos_sin
+    - arm_left_qpos_cos
+    - gripper_left_qpos
+    - arm_right_qpos_sin
+    - arm_right_qpos_cos
+    - gripper_right_qpos
+    - grasp_left
+    - grasp_right
   reset_joint_pos: null
   base_name: null
   scale: 1.0
@@ -10,7 +23,13 @@ robot:
   rendering_params: null
   grasping_mode: physical
   controller_config:
-    arm_0:
+    camera:
+      name: JointController
+    arm_right:
       name: InverseKinematicsController
-    gripper_0:
-      name: NullGripperController
+    gripper_right:
+      name: JointController
+    arm_left:
+      name: InverseKinematicsController
+    gripper_left:
+      name: JointController

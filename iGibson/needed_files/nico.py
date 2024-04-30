@@ -11,7 +11,7 @@ from igibson.utils.constants import SemanticClass
 from igibson.utils.python_utils import assert_valid_key
 
 
-class Nico(ManipulationRobot):
+class Nico(ManipulationRobot, ActiveCameraRobot):
     """
     Nico Robot
     """
@@ -28,8 +28,6 @@ class Nico(ManipulationRobot):
 
         self.right_arm = self.arm_names[0]
         self.left_arm = self.arm_names[1]
-        self.arm_controller = "InverseKinematicsController"
-        self.gripper_controller = "NullGripperController"
 
     @property
     def model_name(self):
@@ -57,8 +55,7 @@ class Nico(ManipulationRobot):
     @property
     def controller_order(self):
         # Ordered by general robot kinematics chain
-
-        controllers = []
+        controllers = ["camera"]
         for arm in self.arm_names:
             controllers += ["arm_{}".format(arm), "gripper_{}".format(arm)]
 
@@ -69,66 +66,145 @@ class Nico(ManipulationRobot):
         # Always call super first
         controllers = super()._default_controllers
 
-        # We use multi finger gripper, differential drive, and IK controllers as default
-        #controllers["base"] = "DifferentialDriveController"
-        #controllers["camera"] = "JointController"
+        # We use multi finger gripper and IK controllers as default
+        controllers["camera"] = "JointController"
         for arm in self.arm_names:
-            controllers["arm_{}".format(arm)] = self.arm_controller
-            controllers["gripper_{}".format(arm)] = self.gripper_controller
+            controllers["arm_{}".format(arm)] = "InverseKinematicsController"
+            controllers["gripper_{}".format(arm)] = "JointController"
+        # print("*"*100)
+        # print("Default controllers", controllers)
+        # print("*"*100)
+        # try:
+        #     print("Printing names and data of controllers")
+        #     for name, controller in controllers.items():
+        #         print(name,":", controller)#, "controller dim", controller.command_dim)
+        # except Exception as e:
+        #     print("Nah, I'd continue without printing")
+        #     print("EXCEPTION:", e)
+
+        return controllers
+    
+    
+    @property
+    def _default_camera_joint_controller_config(self):
+        """
+        :return: Dict[str, Any] Default camera joint controller config to control this robot's camera
+        """
+        # Always run super method first
+        cfg = super()._default_camera_joint_controller_config
+
+        cfg["motor_type"] = "position"
+        cfg["compute_delta_in_quat_space"] = [(3, 4, 5)]
+        cfg["command_output_limits"] = None
+
+        return cfg
+    
+    @property
+    def _default_gripper_joint_controller_configs(self):
+        # The use case for the joint controller for the BehaviorRobot is supporting the VR action space. We configure
+        # this accordingly.
+        dic = super()._default_gripper_joint_controller_configs
+
+        for arm in self.arm_names:
+            # Compute the command output limits that would allow -1 to fully open and 1 to fully close.
+            joint_lower_limits = self.control_limits["position"][0][self.gripper_control_idx[arm]]
+            joint_upper_limits = self.control_limits["position"][1][self.gripper_control_idx[arm]]
+            ranges = joint_upper_limits - joint_lower_limits
+            output_ranges = (-ranges, ranges)
+            dic[arm].update(
+                {
+                    "motor_type": "position",
+                    "parallel_mode": True,
+                    "inverted": True,
+                    "command_input_limits": (0, 1),
+                    "command_output_limits": output_ranges,
+                    "use_delta_commands": True,
+                }
+            )
+        return dic
+    
+    @property
+    def _default_controller_config(self):
+        # controllers = {
+        #     "camera": {"JointController": self._default_camera_controller_configs},
+        # }
+        # controllers.update(
+        #     {"arm_%s" % arm: {"JointController": self._default_arm_controller_configs[arm]} for arm in self.arm_names}
+        # )
+        controllers = super()._default_controller_config
+
+        controllers.update(
+            {
+                "gripper_%s"
+                % arm: {
+                    #"NullGripperController": self._default_gripper_null_controller_configs[arm],
+                    #"MultiFingerGripperController": self._default_gripper_multi_finger_controller_configs[arm],
+                    "JointController": self._default_gripper_joint_controller_configs[arm],
+                }
+                for arm in self.arm_names
+            }
+        )
         return controllers
 
 
     @property
     def default_joint_pos(self):
-        pos = np.zeros(16)
-        #pos[self.camera_control_idx] = np.array([0.0, 0.45])
-        print("Default joint positions")
-        print("self.right_arm:", self.right_arm)
-        print("Indexes for the position array given by gripper_control_idx[self.right_arm]", self.gripper_control_idx[self.right_arm])
+        pos = np.zeros(20)
+        # CAMERA (head_z and head_y joints in that order)
+        pos[self.camera_control_idx] = np.array([0.0, 0.0])
+        # RIGHT ARM
+        pos[self.arm_control_idx[self.right_arm]] = np.array(
+                [   0,  #r_shoulder_z_rjoint
+                            #lower="-0.4363" upper="1.3963"
+                    0,  #r_shoulder_y_rjoint
+                            #lower="-0.5236" upper="3.1416"
+                    0,  #r_upperarm_x_rjoint
+                            #lower="0" upper="1.2217"
+               0.8726,  #r_elbow_y_rjoint
+                            #lower="0.8726" upper="3.1416"
+                    0,  #r_wrist_z_rjoint
+                            #lower="-1.571" upper="1.571"
+                    0,  #r_wrist_x_rjoint
+                            #lower="-.78" upper="0.78"
+                ]
+                 
+            )
         pos[self.gripper_control_idx[self.right_arm]] = np.array(
                 [
-                    0.00,   #r_wrist_x_rjoint
-                            #Minimum: -0.78, Maximum: 0.78, Average: 0          
-                   -1.285    #gripper_rjoint
-                            #Minimum: -2.57, Maximum: 0, Average: -1.285
+                     0.00,  #gripper_rjoint (index finger)
+                                #lower="-2.57" upper="0"        
+                     0.00,  #middlefinger_rjoint
+                                #lower="-2.57" upper="0"
+                     0.00,  #litlefinger_rjoint
+                                #lower="-2.57" upper="0"
                 ]
             )
-        print("Indexes for the position array given by arm_control_idx[self.right_arm]", self.arm_control_idx[self.right_arm])
-        pos[self.arm_control_idx[self.right_arm]] = np.array(
-                [   0,   #Torso - Shoulder
-                            #Minimum: -0.4363, Maximum: 1.3963, Average: 0.48
-                    0,   #Shoulder - Collarbone
-                            #Minumim: -0.5236, Maximum: 3.1416, Average: 1.309
-                    0,   #Collarbone - Upper arm
-                            #Minumim: 0, Maximum: 1.2217, Average: 0.61085
-                  0.8726,   #Upper arm - Lower arm
-                            #Minumim: 0.8726, Maximum: 3.1416, Average: 2.0071
-                       0    #Lower arm - Wrist
-                            #Minumim: -1.571, Maximum: 1.571, Average: 0
+        # LEFT ARM
+        pos[self.arm_control_idx[self.left_arm]] = np.array(
+                [-0.2,  #l_shoulder_z_rjoint
+                            #lower="-1.3963" upper="0.4363"
+                    0,  #l_shoulder_y_rjoint
+                            #lower="-0.5236" upper="3.1416"
+                    0,  #l_upperarm_x_rjoint
+                            #lower="0" upper="1.2217"
+               0.8726,  #l_elbow_y_rjoint
+                            #lower="0.8726" upper="3.1416"
+               -1.571,  #l_wrist_z_rjoint
+                            #lower="-1.571" upper="1.571"
+                    0,  #l_wrist_x_rjoint
+                            #lower="-.78" upper="0.78"
                 ]
                  
             )
         pos[self.gripper_control_idx[self.left_arm]] = np.array(
                 [
-                    0.00,   #l_wrist_x_rjoint
-                            #Minimum: -0.78, Maximum: 0.78, Average: 0          
-                   -1.285    #grippel_rjoint
-                            #Minimum: -2.57, Maximum: 0, Average: -1.285
+                    0.00,  #grippel_rjoint (index finger)
+                                #lower="0" upper="2.57"        
+                    0.00,  #middlefingel_rjoint
+                                #lower="0" upper="2.57"
+                    0.00,  #litlefingel_rjoint
+                                #lower="0" upper="2.57"
                 ]
-            )
-        pos[self.arm_control_idx[self.left_arm]] = np.array(
-                [   -0.2,   #Torso - Shoulder
-                            #Minimum: -0.4363, Maximum: 1.3963, Average: 0.48
-                    0,   #Shoulder - Collarbone
-                            #Minumim: -0.5236, Maximum: 3.1416, Average: 1.309
-                    0,   #Collarbone - Upper arm
-                            #Minumim: 0, Maximum: 1.2217, Average: 0.61085
-                  0.8726,   #Upper arm - Lower arm
-                            #Minumim: 0.8726, Maximum: 3.1416, Average: 2.0071
-                       -1.571    #Lower arm - Wrist
-                            #Minumim: -1.571, Maximum: 1.571, Average: 0
-                ]
-                 
             )
         return pos
 
@@ -158,12 +234,12 @@ class Nico(ManipulationRobot):
     #         ]
     #     }
 
-    # @property
-    # def camera_control_idx(self):
-    #     """
-    #     :return Array[int]: Indices in low-level control vector corresponding to [tilt, pan] camera joints.
-    #     """
-    #     return np.array([0, 1])
+    @property
+    def camera_control_idx(self):
+        """
+        :return Array[int]: Indices in low-level control vector corresponding to [tilt, pan] camera joints.
+        """
+        return np.array([0, 1])
     
     @property
     def arm_control_idx(self):
@@ -171,7 +247,7 @@ class Nico(ManipulationRobot):
         :return dict[str, Array[int]]: Dictionary mapping arm appendage name to indices in low-level control
             vector corresponding to arm joints.
         """
-        return {self.right_arm: np.array([2, 3, 4, 5, 6]), self.left_arm: np.array([9, 10, 11, 12, 13])}
+        return {self.right_arm: np.array([2, 3, 4, 5, 6, 7]), self.left_arm: np.array([11, 12, 13, 14, 15, 16])}
 
     @property
     def gripper_control_idx(self):
@@ -179,7 +255,7 @@ class Nico(ManipulationRobot):
         :return dict[str, Array[int]]: Dictionary mapping arm appendage name to indices in low-level control
             vector corresponding to gripper joints.
         """
-        return {self.right_arm: np.array([7, 8]), self.left_arm: np.array([14, 15])}
+        return {self.right_arm: np.array([8, 9, 10]), self.left_arm: np.array([17, 18, 19])}
 
     @property
     def disabled_collision_pairs(self):
@@ -201,15 +277,15 @@ class Nico(ManipulationRobot):
 
     @property
     def eef_link_names(self):
-        return {self.right_arm: "gripper", self.left_arm: "grippel"}
+        return {self.right_arm: "right_palm", self.left_arm: "left_palm"}
 
     @property
     def finger_link_names(self):
-        return {self.right_arm: ["endeffector"], self.left_arm: ["endeffectol"]}
+        return {self.right_arm: ["gripper", "middlefinger", "littlefinger"], self.left_arm: ["grippel", "middlefingel", "littlefingel"]}
 
     @property
     def finger_joint_names(self):
-        return {self.right_arm: ["gripper_rjoint"], self.left_arm: ["grippel_rjoint"]} #in nico_upper_rh6d.urdf the endeffector_joint joint is fixed
+        return {self.right_arm: ["gripper_rjoint", "middlefinger_rjoint", "litlefinger_rjoint"], self.left_arm: ["grippel_rjoint", "middlefingel_rjoint", "litlefingel_rjoint"]}
 
     @property
     def model_file(self):
