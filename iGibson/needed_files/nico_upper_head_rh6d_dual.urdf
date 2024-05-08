@@ -356,7 +356,7 @@
 		<axis xyz="0 1 0"/>
 		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
 	</joint>
-	<joint name="litlefinger_rjoint" type="revolute"> <!--joint for littlefinger-->
+	<joint name="littlefinger_rjoint" type="revolute"> <!--joint for littlefinger-->
 		<parent link="right_palm"/>
 		<child link="littlefinger"/>
 		<origin rpy="0 0 0" xyz="0.00 0.02 -0.06"/>
@@ -387,6 +387,10 @@
     	<parent link="gripper"/>
     	<child link="endeffector"/>
     	<origin rpy="0 0 0" xyz="0.00 -0.0 -0.05"/>
+		<!--
+		<axis xyz="0 1 0"/>
+		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
+		-->
 	</joint>
     <!-- ====LEFT ARM=== -->
     <link name="left_shoulder">	
@@ -570,8 +574,8 @@
         		<sphere radius="0.01"/>
       		</geometry>
     	</visual>
-  	</link>
-	<joint name="endeffector_joint" type="fixed">
+  	</link-->
+	<!--joint name="endeffector_joint" type="fixed">
     	<parent link="gripper"/>
     	<child link="endeffector"/>
     	<origin rpy="0 0 0" xyz="0.00 -0.02 -0.11"/>
@@ -649,7 +653,7 @@
 		<axis xyz="0 1 0"/>
 		<limit effort="30" lower="0" upper="2.57" velocity="1"/>
 	</joint>
-	<joint name="litlefingel_rjoint" type="revolute">
+	<joint name="littlefingel_rjoint" type="revolute">
 		<parent link="left_palm"/>
 		<child link="littlefingel"/>
 		<origin rpy="0 0 0" xyz="0.00 0.02 -0.06"/>

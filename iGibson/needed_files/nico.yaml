@@ -21,7 +21,7 @@ robot:
   scale: 1.0
   self_collision: false
   rendering_params: null
-  grasping_mode: physical
+  grasping_mode: sticky
   controller_config:
     camera:
       name: JointController

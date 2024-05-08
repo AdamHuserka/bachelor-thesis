@@ -10,6 +10,11 @@ from igibson.robots.manipulation_robot import GraspingPoint, ManipulationRobot
 from igibson.utils.constants import SemanticClass
 from igibson.utils.python_utils import assert_valid_key
 
+#THUMB_2_POS = np.array([0, -0.02, -0.05])
+#THUMB_1_POS = np.array([0, -0.015, -0.02])
+PALM_CENTER_POS = np.array([ 0.035,   0.00,   0.00])
+PALM_BASE_POS = np.array([ 0.025,   0.00,   0.00])
+FINGER_TIP_POS = np.array([0.05, 0, 0])
 
 class Nico(ManipulationRobot, ActiveCameraRobot):
     """
@@ -18,13 +23,18 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
 
     def __init__(
         self,
+        grasping_mode="sticky",
         **kwargs,
     ):
         """
+        :param grasping_mode: None or str, One of {"physical", "assisted", "sticky"}.
+            If "physical", no assistive grasping will be applied (relies on contact friction + finger force).
+            If "assisted", will magnetize any object touching and within the gripper's fingers.
+            If "sticky", will magnetize any object touching the gripper's fingers.
         :param **kwargs: see ManipulationRobot
         """
         # Run super init
-        super().__init__(**kwargs)
+        super().__init__(grasping_mode=grasping_mode, **kwargs)
 
         self.right_arm = self.arm_names[0]
         self.left_arm = self.arm_names[1]
@@ -160,7 +170,7 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
                             #lower="-0.5236" upper="3.1416"
                     0,  #r_upperarm_x_rjoint
                             #lower="0" upper="1.2217"
-               0.8726,  #r_elbow_y_rjoint
+                    1.5,  #r_elbow_y_rjoint
                             #lower="0.8726" upper="3.1416"
                     0,  #r_wrist_z_rjoint
                             #lower="-1.571" upper="1.571"
@@ -210,29 +220,35 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
 
     @property
     def gripper_link_to_grasp_point(self):
-        return {self.right_arm: np.array([0.1, 0, 0]), self.left_arm: np.array([-0.1, 0, 0])}
+        return {arm: PALM_CENTER_POS * (1 if arm == "right_hand" else -1) for arm in self.arm_names}
 
-    # @property
-    # def assisted_grasp_start_points(self):
-    #     return {
-    #         self.default_arm: [
-    #             GraspingPoint(link_name="r_gripper_finger_link", position=[0.04, -0.012, 0.014]),
-    #             GraspingPoint(link_name="r_gripper_finger_link", position=[0.04, -0.012, -0.014]),
-    #             GraspingPoint(link_name="r_gripper_finger_link", position=[-0.04, -0.012, 0.014]),
-    #             GraspingPoint(link_name="r_gripper_finger_link", position=[-0.04, -0.012, -0.014]),
-    #         ]
-    #     }
+    @property
+    def assisted_grasp_start_points(self):
+        side_coefficients = {"left_hand": np.array([1, -1, 1]), "right_hand": np.array([1, 1, 1])}
+        return {
+            arm: [
+                GraspingPoint(link_name="%s_palm" % arm, position=PALM_BASE_POS),
+                GraspingPoint(link_name="%s_palm" % arm, position=PALM_CENTER_POS * side_coefficients[arm]),
+                # GraspingPoint(
+                #     link_name="%s_%s" % (arm, THUMB_LINK_NAME), position=THUMB_1_POS * side_coefficients[arm]
+                # ),
+                # GraspingPoint(
+                #     link_name="%s_%s" % (arm, THUMB_LINK_NAME), position=THUMB_2_POS * side_coefficients[arm]
+                # ),
+            ]
+            for arm in self.arm_names
+        }
 
-    # @property
-    # def assisted_grasp_end_points(self):
-    #     return {
-    #         self.default_arm: [
-    #             GraspingPoint(link_name="l_gripper_finger_link", position=[0.04, 0.012, 0.014]),
-    #             GraspingPoint(link_name="l_gripper_finger_link", position=[0.04, 0.012, -0.014]),
-    #             GraspingPoint(link_name="l_gripper_finger_link", position=[-0.04, 0.012, 0.014]),
-    #             GraspingPoint(link_name="l_gripper_finger_link", position=[-0.04, 0.012, -0.014]),
-    #         ]
-    #     }
+    @property
+    def assisted_grasp_end_points(self):
+        side_coefficients = {"left_hand": np.array([1, -1, 1]), "right_hand": np.array([1, 1, 1])}
+        return {
+            arm: [
+                GraspingPoint(link_name="%s" % finger, position=FINGER_TIP_POS * side_coefficients[arm])
+                for finger in self.finger_link_names[arm]
+            ]
+            for arm in self.arm_names
+        }
 
     @property
     def camera_control_idx(self):
@@ -285,7 +301,7 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
 
     @property
     def finger_joint_names(self):
-        return {self.right_arm: ["gripper_rjoint", "middlefinger_rjoint", "litlefinger_rjoint"], self.left_arm: ["grippel_rjoint", "middlefingel_rjoint", "litlefingel_rjoint"]}
+        return {self.right_arm: ["gripper_rjoint", "middlefinger_rjoint", "littlefinger_rjoint"], self.left_arm: ["grippel_rjoint", "middlefingel_rjoint", "littlefingel_rjoint"]}
 
     @property
     def model_file(self):
