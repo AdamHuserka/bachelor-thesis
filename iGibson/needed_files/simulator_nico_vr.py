@@ -83,6 +83,7 @@ class SimulatorNicoVR(SimulatorVR):
         self.robot_origin = {'right': None, 'left': None}
         self.vr_origin = {'right': None, 'left': None}
         self.vr_state = {'right': None, 'left': None}
+        self.reset_origin = {'right': False, 'left': False}
 
 
     def vr_system_update(self):
@@ -148,11 +149,7 @@ class SimulatorNicoVR(SimulatorVR):
 
         self.vr_data_available = True
 
-
-    def reset_origin(self, arm, robot_state, vr_state):\
-        self.robot_origin[arm] = {"pos": robot_pos, "quat": robot_quat}
-        self.vr_origin[arm] = {"pos": self.vr_state[arm]["pos"], "quat": self.vr_state[arm]["quat"]}
-        self.reset_origin[arm] = False
+        
 
     def gen_vr_robot_action(self):
 
@@ -225,7 +222,6 @@ class SimulatorNicoVR(SimulatorVR):
 
         for arm in self.main_vr_robot.arm_names:
             controller_name = "right_controller" if arm == "right" else "left_controller"
-
             if self.get_action_button_state(controller_name, "reset_agent", v):
                 # Query the world position and orientation of the @controller_name
                 valid, controller_pos, _ = v.query(controller_name)[:3]
@@ -233,21 +229,29 @@ class SimulatorNicoVR(SimulatorVR):
 
                 # Keep in same world position as last frame if controller/tracker data is not valid
                 if not valid:
-                    self.reset_origin(arm)
                     continue
                 #Get the robot base link position and rotation
                 robot_pos, robot_orn = robot_body.get_position_orientation()
+                if self.reset_origin[arm]:
+                    self.robot_origin[arm] = {"pos": robot_pos, "quat": robot_orn}
+                    self.vr_origin[arm] = {"pos": controller_pos, "quat": controller_orn}
+                    self.reset_origin[arm] = False
 
-                # Calculate positional action
+                # Calculate Positional Action
                 robot_pos_offset = robot_pos - self.robot_origin[arm]["pos"]
                 target_pos_offset = controller_pos - self.vr_origin[arm]["pos"]
                 pos_action = target_pos_offset - robot_pos_offset
 
+                # Calculate Euler Action
+                robot_quat_offset = quat_diff(robot_quat, self.robot_origin[arm]["quat"])
+                target_quat_offset = quat_diff(controller_orn, self.vr_origin[arm]["quat"])
+                quat_action = quat_diff(target_quat_offset, robot_quat_offset)
+                euler_action = quat_to_euler(quat_action)
 
+                delta_action = np.concatenate((pos_action, euler_action))
 
-
-
-
+                controller = "arm_right"
+                action[self.main_vr_robot.controller_action_idx[controller]] = delta_action
 
                     #world_pos, world_orn = self.prev_right_controller_pos, self.prev_right_controller_orn
                     #self.prev_right_controller_pos, self.prev_right_controller_orn = world_pos, world_orn
@@ -259,15 +263,15 @@ class SimulatorNicoVR(SimulatorVR):
                 #     [0, 0, 0],
                 #     inv_prev_local_orn,
                 # )
-                delta_local_orn = np.array(delta_local_orn)
-                delta_local_orn *= 10
-                delta_local_orn = np.clip(delta_local_orn, -1, 1)
-                print(delta_local_orn)
-                delta_local_orn = p.getEulerFromQuaternion(delta_local_orn.tolist())
-                # Get the delta local position in the reference frame of the body
-                #delta_local_pos = np.array(des_local_pos) - np.array(right_controller_prev_local_pos)
-                delta_local_pos = np.array(world_pos) - np.array(self.prev_right_controller_pos)
-                delta_local_pos *= 10
+                # delta_local_orn = np.array(delta_local_orn)
+                # delta_local_orn *= 10
+                # delta_local_orn = np.clip(delta_local_orn, -1, 1)
+                # print(delta_local_orn)
+                # delta_local_orn = p.getEulerFromQuaternion(delta_local_orn.tolist())
+                # # Get the delta local position in the reference frame of the body
+                # #delta_local_pos = np.array(des_local_pos) - np.array(right_controller_prev_local_pos)
+                # delta_local_pos = np.array(world_pos) - np.array(self.prev_right_controller_pos)
+                # delta_local_pos *= 10
                 if self.debug:
                     print()
                     if self.log_writes > 0:
@@ -286,15 +290,6 @@ class SimulatorNicoVR(SimulatorVR):
                         self.log.close()
                         self.debug = False
 
-                controller_name = "arm_right"
-                action[self.main_vr_robot.controller_action_idx[controller_name]] = np.concatenate(
-                    [delta_local_pos, delta_local_orn[:3]]
-                )
-
-                self.prev_right_controller_pos = world_pos
-                self.prev_right_controller_orn = world_orn
-            else:
-                pass
 
             #gripper
             part_name = "right"
