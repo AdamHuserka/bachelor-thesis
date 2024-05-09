@@ -80,8 +80,9 @@ class SimulatorNicoVR(SimulatorVR):
 
         self.writing_time = time.time()
 
-        self.prev_right_controller_pos = np.array([0,0,0])
-        self.prev_right_controller_orn = np.array([0,0,0,0])
+        self.robot_origin = {'right': None, 'left': None}
+        self.vr_origin = {'right': None, 'left': None}
+        self.vr_state = {'right': None, 'left': None}
 
 
     def vr_system_update(self):
@@ -118,7 +119,7 @@ class SimulatorNicoVR(SimulatorVR):
 
         # Update haptics for body and hands
         if self.main_vr_robot:
-            vr_body_id = self.main_vr_robot.base_link.body_id
+            robot_body_id = self.main_vr_robot.base_link.body_id
             vr_hands = [
                 ("left_controller", "left"),
                 ("right_controller", "right"),
@@ -126,7 +127,7 @@ class SimulatorNicoVR(SimulatorVR):
 
             # Check for body haptics
             wall_ids = [bid for x in self.scene.objects_by_category["walls"] for bid in x.get_body_ids()]
-            for c_info in p.getContactPoints(vr_body_id):
+            for c_info in p.getContactPoints(robot_body_id):
                 if wall_ids and (c_info[1] in wall_ids or c_info[2] in wall_ids):
                     for controller in ["left_controller", "right_controller"]:
                         is_valid, _, _ = self.get_data_for_vr_device(controller)
@@ -146,6 +147,12 @@ class SimulatorNicoVR(SimulatorVR):
                         self.trigger_haptic_pulse(hand_device, 0.3)
 
         self.vr_data_available = True
+
+
+    def reset_origin(self, arm, robot_state, vr_state):\
+        self.robot_origin[arm] = {"pos": robot_pos, "quat": robot_quat}
+        self.vr_origin[arm] = {"pos": self.vr_state[arm]["pos"], "quat": self.vr_state[arm]["quat"]}
+        self.reset_origin[arm] = False
 
     def gen_vr_robot_action(self):
 
@@ -174,30 +181,30 @@ class SimulatorNicoVR(SimulatorVR):
         # Update body action space
         hmd_is_valid, hmd_pos, hmd_orn, hmd_r = v.query("hmd")[:4]
         #torso_is_valid, torso_pos, torso_orn = v.query("torso_tracker")
-        vr_body = self.main_vr_robot.base_link
-        prev_body_pos, prev_body_orn = vr_body.get_position_orientation()
-        inv_prev_body_pos, inv_prev_body_orn = p.invertTransform(prev_body_pos, prev_body_orn)
+        robot_body = self.main_vr_robot.base_link
+        prev_body_pos, prev_body_orn = robot_body.get_position_orientation()
+        # inv_prev_body_pos, inv_prev_body_orn = p.invertTransform(prev_body_pos, prev_body_orn)
 
-        if hmd_is_valid:
-            des_body_pos, des_body_orn = prev_body_pos, p.getQuaternionFromEuler([0, 0, calc_z_rot_from_right(hmd_r)])
-        else:
-            des_body_pos, des_body_orn = prev_body_pos, prev_body_orn
+        # if hmd_is_valid:
+        #     des_body_pos, des_body_orn = prev_body_pos, p.getQuaternionFromEuler([0, 0, calc_z_rot_from_right(hmd_r)])
+        # else:
+        #     des_body_pos, des_body_orn = prev_body_pos, prev_body_orn
 
-        body_delta_pos, body_delta_orn = p.multiplyTransforms(
-            inv_prev_body_pos, inv_prev_body_orn, des_body_pos, des_body_orn
-        )
-        body_delta_rot = p.getEulerFromQuaternion(body_delta_orn)
+        # body_delta_pos, body_delta_orn = p.multiplyTransforms(
+        #     inv_prev_body_pos, inv_prev_body_orn, des_body_pos, des_body_orn
+        # )
+        # body_delta_rot = p.getEulerFromQuaternion(body_delta_orn)
 
-        # Get new body position so we can calculate correct relative transforms for other VR objects
-        clipped_body_delta_pos = np.clip(body_delta_pos, -BODY_LINEAR_VELOCITY, BODY_LINEAR_VELOCITY).tolist()
-        clipped_body_delta_orn = p.getQuaternionFromEuler(
-            np.clip(body_delta_rot, -BODY_ANGULAR_VELOCITY, BODY_ANGULAR_VELOCITY).tolist()
-        )
-        new_body_pos, new_body_orn = p.multiplyTransforms(
-            prev_body_pos, prev_body_orn, clipped_body_delta_pos, clipped_body_delta_orn
-        )
-        # Also calculate its inverse for further local transform calculations
-        inv_new_body_pos, inv_new_body_orn = p.invertTransform(new_body_pos, new_body_orn)
+        # # Get new body position so we can calculate correct relative transforms for other VR objects
+        # clipped_body_delta_pos = np.clip(body_delta_pos, -BODY_LINEAR_VELOCITY, BODY_LINEAR_VELOCITY).tolist()
+        # clipped_body_delta_orn = p.getQuaternionFromEuler(
+        #     np.clip(body_delta_rot, -BODY_ANGULAR_VELOCITY, BODY_ANGULAR_VELOCITY).tolist()
+        # )
+        # new_body_pos, new_body_orn = p.multiplyTransforms(
+        #     prev_body_pos, prev_body_orn, clipped_body_delta_pos, clipped_body_delta_orn
+        # )
+        # # Also calculate its inverse for further local transform calculations
+        # inv_new_body_pos, inv_new_body_orn = p.invertTransform(new_body_pos, new_body_orn)
         
         if hmd_is_valid:
             y = hmd_orn[1]
@@ -205,8 +212,8 @@ class SimulatorNicoVR(SimulatorVR):
             controller_name = "camera"
             action[self.main_vr_robot.controller_action_idx[controller_name]] = np.array([z, y])
 
-        right_controller_vr_part = self.main_vr_robot.eef_links["right"]
-        left_controller_vr_part = self.main_vr_robot.eef_links["left"]
+        #VR parts
+        vr_parts = {"right" : self.main_vr_robot.eef_links["right"], "left" : self.main_vr_robot.eef_links["left"]}
 
         right_controller_prev_world_pos, right_controller_prev_world_orn = right_controller_vr_part.get_position_orientation()
         right_controller_prev_local_pos, right_controller_prev_local_orn = right_controller_vr_part.get_local_position_orientation()
@@ -216,93 +223,103 @@ class SimulatorNicoVR(SimulatorVR):
         left_controller_prev_local_pos, left_controller_prev_local_orn = left_controller_vr_part.get_local_position_orientation()
         _, left_controller_inv_prev_local_orn = p.invertTransform(left_controller_prev_local_pos, left_controller_prev_local_orn)
 
-        controller_name = "right_controller"
-        valid, world_pos, _ = v.query(controller_name)[:3]
-        world_orn = v.query(controller_name)[6]
-        if self.get_action_button_state("right_controller", "reset_agent", v):
-            # Keep in same world position as last frame if controller/tracker data is not valid
-            if not valid:
-                world_pos, world_orn = self.prev_right_controller_pos, self.prev_right_controller_orn
-            elif (self.prev_right_controller_pos == np.array([0,0,0])).all() and (self.prev_right_controller_orn == np.array([0,0,0,0])).all():
-                self.prev_right_controller_pos, self.prev_right_controller_orn = world_pos, world_orn
-                
-            # Get desired local position and orientation transforms
-            # des_local_pos, des_local_orn = p.multiplyTransforms(
-            #     inv_new_body_pos, inv_new_body_orn, world_pos, world_orn
-            # )
+        for arm in self.main_vr_robot.arm_names:
+            controller_name = "right_controller" if arm == "right" else "left_controller"
 
-            # Get the delta local orientation in the reference frame of the body
-            # _, delta_local_orn = p.multiplyTransforms(
-            #     [0, 0, 0],
-            #     des_local_orn,
-            #     [0, 0, 0],
-            #     right_controller_inv_prev_local_orn,
-            # )
-            _, inv_prev_local_orn = p.invertTransform(self.prev_right_controller_pos, self.prev_right_controller_orn)
-            _, delta_local_orn = p.multiplyTransforms(
-                [0, 0, 0],
-                world_orn,
-                [0, 0, 0],
-                inv_prev_local_orn,
-            )
-            delta_local_orn = np.array(delta_local_orn)
-            delta_local_orn *= 10
-            delta_local_orn = np.clip(delta_local_orn, -1, 1)
-            print(delta_local_orn)
-            delta_local_orn = p.getEulerFromQuaternion(delta_local_orn.tolist())
-            # Get the delta local position in the reference frame of the body
-            #delta_local_pos = np.array(des_local_pos) - np.array(right_controller_prev_local_pos)
-            delta_local_pos = np.array(world_pos) - np.array(self.prev_right_controller_pos)
-            delta_local_pos *= 10
-            if self.debug:
-                print()
-                if self.log_writes > 0:
-                    print("WRITING LOG")
-                    self.log.writelines("Write time diff:" + str(time.time() - self.writing_time) + "\n")
-                    self.writing_time = time.time()
-                    self.log.writelines("Delta local pos:" + str(delta_local_pos) + "\n")
-                    self.log.writelines("Delta local orn:" + str(delta_local_orn) + "\n")
-                    #self.log.writelines("Desired local pos:" + str(des_local_pos) + "\n")
-                    #self.log.writelines("right_controller_prev_local_pos:" + str(right_controller_prev_local_pos) + "\n")
-                    self.log.writelines("World pos:" + str(world_pos) + "\n")
-                    self.log.writelines("World orn:" + str(world_orn) + "\n")
-                    self.log.writelines("\n")
-                    self.log_writes -= 1
-                else:
-                    self.log.close()
-                    self.debug = False
+            if self.get_action_button_state(controller_name, "reset_agent", v):
+                # Query the world position and orientation of the @controller_name
+                valid, controller_pos, _ = v.query(controller_name)[:3]
+                controller_orn = v.query(controller_name)[6]
 
-            controller_name = "arm_right"
-            action[self.main_vr_robot.controller_action_idx[controller_name]] = np.concatenate(
-                [delta_local_pos, delta_local_orn[:3]]
-            )
+                # Keep in same world position as last frame if controller/tracker data is not valid
+                if not valid:
+                    self.reset_origin(arm)
+                    continue
+                #Get the robot base link position and rotation
+                robot_pos, robot_orn = robot_body.get_position_orientation()
 
-            self.prev_right_controller_pos = world_pos
-            self.prev_right_controller_orn = world_orn
+                # Calculate positional action
+                robot_pos_offset = robot_pos - self.robot_origin[arm]["pos"]
+                target_pos_offset = controller_pos - self.vr_origin[arm]["pos"]
+                pos_action = target_pos_offset - robot_pos_offset
 
-        #gripper
-        part_name = "right"
-        fingers = self.main_vr_robot.gripper_control_idx[part_name]
 
-        # The normalized joint positions are inverted and scaled to the (0, 1) range to match VR controller.
-        # Note that we take the minimum (e.g. the most-grasped) finger - this means if the user releases the
-        # trigger, *all* of the fingers are guaranteed to move to the released position.
-        current_trig_frac = 1 - (np.min(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
 
-        if valid:
-            button_name = "{}_controller_button".format(part_name)
-            trig_frac = v.query(button_name)[0]
-            delta_trig_frac = trig_frac - current_trig_frac
-            print("Deltra grasp:", delta_trig_frac)
-        else:
-            # Use the last trigger fraction if no valid input was received from controller.
-            delta_trig_frac = 0
 
-        grip_controller_name = "gripper_" + part_name
 
-        action[self.main_vr_robot.controller_action_idx[grip_controller_name]] = delta_trig_frac
-        print("Whole action", action)
-        print("Right grasp controller idx:", self.main_vr_robot.controller_action_idx[grip_controller_name])
+
+
+                    #world_pos, world_orn = self.prev_right_controller_pos, self.prev_right_controller_orn
+                    #self.prev_right_controller_pos, self.prev_right_controller_orn = world_pos, world_orn
+                    
+                # _, inv_prev_local_orn = p.invertTransform(self.prev_right_controller_pos, self.prev_right_controller_orn)
+                # _, delta_local_orn = p.multiplyTransforms(
+                #     [0, 0, 0],
+                #     world_orn,
+                #     [0, 0, 0],
+                #     inv_prev_local_orn,
+                # )
+                delta_local_orn = np.array(delta_local_orn)
+                delta_local_orn *= 10
+                delta_local_orn = np.clip(delta_local_orn, -1, 1)
+                print(delta_local_orn)
+                delta_local_orn = p.getEulerFromQuaternion(delta_local_orn.tolist())
+                # Get the delta local position in the reference frame of the body
+                #delta_local_pos = np.array(des_local_pos) - np.array(right_controller_prev_local_pos)
+                delta_local_pos = np.array(world_pos) - np.array(self.prev_right_controller_pos)
+                delta_local_pos *= 10
+                if self.debug:
+                    print()
+                    if self.log_writes > 0:
+                        print("WRITING LOG")
+                        self.log.writelines("Write time diff:" + str(time.time() - self.writing_time) + "\n")
+                        self.writing_time = time.time()
+                        self.log.writelines("Delta local pos:" + str(delta_local_pos) + "\n")
+                        self.log.writelines("Delta local orn:" + str(delta_local_orn) + "\n")
+                        #self.log.writelines("Desired local pos:" + str(des_local_pos) + "\n")
+                        #self.log.writelines("right_controller_prev_local_pos:" + str(right_controller_prev_local_pos) + "\n")
+                        self.log.writelines("World pos:" + str(world_pos) + "\n")
+                        self.log.writelines("World orn:" + str(world_orn) + "\n")
+                        self.log.writelines("\n")
+                        self.log_writes -= 1
+                    else:
+                        self.log.close()
+                        self.debug = False
+
+                controller_name = "arm_right"
+                action[self.main_vr_robot.controller_action_idx[controller_name]] = np.concatenate(
+                    [delta_local_pos, delta_local_orn[:3]]
+                )
+
+                self.prev_right_controller_pos = world_pos
+                self.prev_right_controller_orn = world_orn
+            else:
+                pass
+
+            #gripper
+            part_name = "right"
+            fingers = self.main_vr_robot.gripper_control_idx[part_name]
+
+            # The normalized joint positions are inverted and scaled to the (0, 1) range to match VR controller.
+            # Note that we take the minimum (e.g. the most-grasped) finger - this means if the user releases the
+            # trigger, *all* of the fingers are guaranteed to move to the released position.
+            current_trig_frac = 1 - (np.min(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
+
+            if valid:
+                button_name = "{}_controller_button".format(part_name)
+                trig_frac = v.query(button_name)[0]
+                delta_trig_frac = trig_frac - current_trig_frac
+                print("Deltra grasp:", delta_trig_frac)
+            else:
+                # Use the last trigger fraction if no valid input was received from controller.
+                delta_trig_frac = 0
+
+            grip_controller_name = "gripper_" + part_name
+
+            action[self.main_vr_robot.controller_action_idx[grip_controller_name]] = delta_trig_frac
+            print("Whole action", action)
+            print("Right grasp controller idx:", self.main_vr_robot.controller_action_idx[grip_controller_name])
+        
 
 
         if self.get_action_button_state("left_controller", "reset_agent", v):
