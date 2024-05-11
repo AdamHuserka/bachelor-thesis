@@ -48,18 +48,31 @@ def main(selection="user", headless=False, short_exec=False):
     s.import_scene(scene)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
+    obj = ArticulatedObject(
+        os.path.join(
+            igibson.ig_dataset_path,
+            "objects",
+            "basket",
+            "e3bae8da192ab3d4a17ae19fa77775ff",
+            "e3bae8da192ab3d4a17ae19fa77775ff.urdf",
+        ),
+        scale=1,
+    )
+    s.import_object(obj)
+    obj.set_position_orientation([0.85, 0.00000, 1.0], [0, 0, 1, 1])
+
     objects = [
         ("jenga/jenga.urdf", (1.300000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
         ("jenga/jenga.urdf", (1.200000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
         ("jenga/jenga.urdf", (1.100000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
         ("jenga/jenga.urdf", (1.000000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
         ("jenga/jenga.urdf", (0.900000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
-        ("jenga/jenga.urdf", (0.800000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
+        ("jenga/jenga.urdf", (0.650000, -0.100000, 1), (0.000000, 0.707107, 0.000000, 0.707107)),
         ("table/table.urdf", (1.000000, -0.200000, 0.000000), (0.000000, 0.000000, 0.707107, 0.707107)),
         ("duck_vhacd.urdf", (1.050000, -0.500000, 0.700000), (0.000000, 0.000000, 0.707107, 0.707107)),
         ("duck_vhacd.urdf", (0.950000, -0.100000, 0.700000), (0.000000, 0.000000, 0.707107, 0.707107)),
-        ("sphere_small.urdf", (0.850000, -0.400000, 0.700000), (0.000000, 0.000000, 0.707107, 0.707107)),
-        ("duck_vhacd.urdf", (0.850000, -0.400000, 1.00000), (0.000000, 0.000000, 0.707107, 0.707107)),
+        #("sphere_small.urdf", (0.650000, -0.400000, 0.700000), (0.000000, 0.000000, 0.707107, 0.707107)),
+        #("duck_vhacd.urdf", (0.650000, -0.400000, 1.00000), (0.000000, 0.000000, 0.707107, 0.707107)),
     ]
 
     for item in objects:
@@ -71,19 +84,6 @@ def main(selection="user", headless=False, short_exec=False):
         item_ob.set_position(pos)
         item_ob.set_orientation(orn)
 
-    obj = ArticulatedObject(
-        os.path.join(
-            igibson.ig_dataset_path,
-            "objects",
-            "basket",
-            "e3bae8da192ab3d4a17ae19fa77775ff",
-            "e3bae8da192ab3d4a17ae19fa77775ff.urdf",
-        ),
-        scale=2,
-    )
-    s.import_object(obj)
-    obj.set_position_orientation([1.1, 0.300000, 1.0], [0, 0, 0, 1])
-
     config = parse_config(os.path.join(igibson.configs_path, "robots", "nico.yaml"))
     nico = Nico(**config["robot"])
     s.import_object(nico)
@@ -93,6 +93,15 @@ def main(selection="user", headless=False, short_exec=False):
     print("FINISHED ALL LOADING, STARTING LOOP")
     while True:
         s.step()
+
+        event_data = s.get_vr_events()
+        # print(event_data)
+        if event_data:
+            print("----- Next set of event data (on current frame): -----")
+            for event in event_data:
+                readable_event = ["left_controller" if event[0] == 0 else "right_controller", event[1], event[2]]
+                print("Event (controller, button_idx, press_id): {}".format(readable_event))
+            print("------------------------------------------------------")
 
         nico.apply_action(s.gen_vr_robot_action())
 

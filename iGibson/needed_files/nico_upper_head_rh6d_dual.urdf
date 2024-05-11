@@ -349,6 +349,13 @@
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
 	</link>
+	<joint name="gripper_rjoint" type="revolute">
+		<parent link="right_palm"/>
+		<child link="gripper"/>
+		<origin rpy="0 0 0" xyz="0.00 -0.02 -0.06"/>
+		<axis xyz="0 1 0"/>
+		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
+	</joint>
 	<joint name="middlefinger_rjoint" type="revolute"> <!--joint for middlefinger-->
 		<parent link="right_palm"/>
 		<child link="middlefinger"/>
@@ -360,13 +367,6 @@
 		<parent link="right_palm"/>
 		<child link="littlefinger"/>
 		<origin rpy="0 0 0" xyz="0.00 0.02 -0.06"/>
-		<axis xyz="0 1 0"/>
-		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
-	</joint>
-	<joint name="gripper_rjoint" type="revolute">
-		<parent link="right_palm"/>
-		<child link="gripper"/>
-		<origin rpy="0 0 0" xyz="0.00 -0.02 -0.06"/>
 		<axis xyz="0 1 0"/>
 		<limit effort="30" lower="-2.57" upper="0" velocity="1"/>
 	</joint>
@@ -624,7 +624,7 @@
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
 	</link>
-	<link name="grippel"> <!--indexfinder-->
+	<link name="grippel"> <!--indexfinger-->
 		<visual>
 			<geometry>
 				<mesh filename="mesh/finger.obj"/>
@@ -646,6 +646,13 @@
 			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
 		</inertial>
 	</link>
+	<joint name="grippel_rjoint" type="revolute">
+		<parent link="left_palm"/>
+		<child link="grippel"/>
+		<origin rpy="0 0 0" xyz="0.00 -0.02 -0.06"/>
+		<axis xyz="0 1 0"/>
+		<limit effort="30" lower="0" upper="2.57" velocity="1"/>
+	</joint>
 	<joint name="middlefingel_rjoint" type="revolute">
 		<parent link="left_palm"/>
 		<child link="middlefingel"/>
@@ -660,13 +667,6 @@
 		<axis xyz="0 1 0"/>
 		<limit effort="30" lower="0" upper="2.57" velocity="1"/>
 	</joint>
-	<joint name="grippel_rjoint" type="revolute">
-		<parent link="left_palm"/>
-		<child link="grippel"/>
-		<origin rpy="0 0 0" xyz="0.00 -0.02 -0.06"/>
-		<axis xyz="0 1 0"/>
-		<limit effort="30" lower="0" upper="2.57" velocity="1"/>
-	</joint>
 	<link name="endeffectol">
     	<visual>
       		<origin rpy="0 0 0" xyz="0 0.0 0.0"/>
@@ -674,6 +674,11 @@
         		<sphere radius="0.01"/>
       		</geometry>
     	</visual>
+		<inertial>
+			<mass value="0.000009"/>
+			<inertia ixx="0" ixy="0" ixz="-0" iyy="0" iyz="0" izz="0"/>
+			<origin rpy="0 0 0" xyz="0.005409 0.000556 -0.005751"/>
+		</inertial>
   	</link>
 	<joint name="endeffectol_joint" type="fixed">
     	<parent link="grippel"/>

@@ -181,25 +181,25 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
             )
         pos[self.gripper_control_idx[self.right_arm]] = np.array(
                 [
-                     0.00,  #gripper_rjoint (index finger)
-                                #lower="-2.57" upper="0"        
-                     0.00,  #middlefinger_rjoint
-                                #lower="-2.57" upper="0"
-                     0.00,  #litlefinger_rjoint
-                                #lower="-2.57" upper="0"
+                    0,  #gripper_rjoint (index finger)
+                            #lower="-2.57" upper="0"        
+                    0,  #middlefinger_rjoint
+                            #lower="-2.57" upper="0"
+                    0,  #litlefinger_rjoint
+                            #lower="-2.57" upper="0"
                 ]
             )
         # LEFT ARM
         pos[self.arm_control_idx[self.left_arm]] = np.array(
-                [-0.2,  #l_shoulder_z_rjoint
+                [   0,  #l_shoulder_z_rjoint
                             #lower="-1.3963" upper="0.4363"
                     0,  #l_shoulder_y_rjoint
                             #lower="-0.5236" upper="3.1416"
                     0,  #l_upperarm_x_rjoint
                             #lower="0" upper="1.2217"
-               0.8726,  #l_elbow_y_rjoint
+                  1.5,  #l_elbow_y_rjoint
                             #lower="0.8726" upper="3.1416"
-               -1.571,  #l_wrist_z_rjoint
+                    0,  #l_wrist_z_rjoint
                             #lower="-1.571" upper="1.571"
                     0,  #l_wrist_x_rjoint
                             #lower="-.78" upper="0.78"
@@ -208,12 +208,12 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
             )
         pos[self.gripper_control_idx[self.left_arm]] = np.array(
                 [
-                    0.00,  #grippel_rjoint (index finger)
-                                #lower="0" upper="2.57"        
-                    0.00,  #middlefingel_rjoint
-                                #lower="0" upper="2.57"
-                    0.00,  #litlefingel_rjoint
-                                #lower="0" upper="2.57"
+                    0,  #grippel_rjoint (index finger)
+                            #lower="0" upper="2.57"        
+                    0,  #middlefingel_rjoint
+                            #lower="0" upper="2.57"
+                    0,  #litlefingel_rjoint
+                            #lower="0" upper="2.57"
                 ]
             )
         return pos
@@ -275,17 +275,19 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
 
     @property
     def disabled_collision_pairs(self):
-        return []
-    
-        # [
-        #     ["torso_lift_link", "shoulder_lift_link"],
-        #     ["torso_lift_link", "torso_fixed_link"],
-        #     ["caster_wheel_link", "estop_link"],
-        #     ["caster_wheel_link", "laser_link"],
-        #     ["caster_wheel_link", "torso_fixed_link"],
-        #     ["caster_wheel_link", "l_wheel_link"],
-        #     ["caster_wheel_link", "r_wheel_link"],
-        # ]
+        return [
+            # ["grippel", "littlefingel"],
+            # ["middlefingel", "grippel"],
+            # ["middlefingel", "littlefingel"],
+            # ["left_palm", "grippel"],
+            # ["left_palm", "middlefingel"],
+            # ["left_palm", "littlefingel"],
+            # ["left_palm", "left_wrist"],
+            # ["left_wrist", "left_lower_arm"],
+            # ["left_lower_arm", "left_upper_arm"],
+            # ["left_upper_arm", "left_collarbone"],
+            # ["left_collarbone", "left_shoulder"],
+            ]
     
     @property
     def arm_names(self):
