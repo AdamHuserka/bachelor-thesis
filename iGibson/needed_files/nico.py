@@ -224,7 +224,7 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
 
     @property
     def assisted_grasp_start_points(self):
-        side_coefficients = {"left_hand": np.array([1, -1, 1]), "right_hand": np.array([1, 1, 1])}
+        side_coefficients = {"left_hand": np.array([-1, -1, 1]), "right_hand": np.array([1, 1, 1])}
         return {
             arm: [
                 GraspingPoint(link_name="%s_palm" % arm, position=PALM_BASE_POS),
@@ -241,7 +241,7 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
 
     @property
     def assisted_grasp_end_points(self):
-        side_coefficients = {"left_hand": np.array([1, -1, 1]), "right_hand": np.array([1, 1, 1])}
+        side_coefficients = {"left_hand": np.array([-1, -1, 1]), "right_hand": np.array([1, 1, 1])}
         return {
             arm: [
                 GraspingPoint(link_name="%s" % finger, position=FINGER_TIP_POS * side_coefficients[arm])

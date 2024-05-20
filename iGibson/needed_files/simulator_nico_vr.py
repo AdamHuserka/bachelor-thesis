@@ -16,6 +16,7 @@ from igibson.robots.robot_base import BaseRobot
 from igibson.simulator_vr import SimulatorVR
 from igibson.utils.vr_utils import VR_CONTROLLERS, VR_DEVICES, VrData, calc_offset, calc_z_rot_from_right
 from igibson.utils.transform_utils import quat2mat, mat2quat, matrix_inverse, mat2euler
+from igibson.external.pybullet_tools.utils import set_joint_positions
 
 log = logging.getLogger(__name__)
 
@@ -227,7 +228,18 @@ class SimulatorNicoVR(SimulatorVR):
             action[self.main_vr_robot.controller_action_idx[controller_name]] = np.array([z, y])
 
         #VR parts
-        vr_parts = {"right" : self.main_vr_robot.eef_links["right"], "left" : self.main_vr_robot.eef_links["left"]}
+        # vr_parts = {"right" : self.main_vr_robot.eef_links["right"], "left" : self.main_vr_robot.eef_links["left"]}
+
+        reset = self.get_action_button_state("right_controller", "reset_agent", v) or self.get_action_button_state("left_controller", "reset_agent", v)
+        if reset:
+            print("RESETTING AGENT")
+            self.main_vr_robot.reset()
+            self.main_vr_robot.keep_still()
+            # robot_id = self.main_vr_robot.get_body_ids()[0]
+            # for arm in self.main_vr_robot.arm_names:
+            #     arm_idx = self.main_vr_robot.arm_control_idx[arm]
+            #     set_joint_positions(robot_id, arm_idx, self.main_vr_robot.default_joint_pos[arm_idx])
+            # return action
 
         for arm in self.main_vr_robot.arm_names:
             controller_name = "right_controller" if arm == "right" else "left_controller"
@@ -286,9 +298,7 @@ class SimulatorNicoVR(SimulatorVR):
             # The normalized joint positions are inverted and scaled to the (0, 1) range to match VR controller.
             # Note that we take the minimum (e.g. the most-grasped) finger - this means if the user releases the
             # trigger, *all* of the fingers are guaranteed to move to the released position.
-            if self.get_action_button_state(controller_name, "reset_agent", v):
-                print("RESETTING AGENT")
-                self.main_vr_robot.reset()
+            
 
             if valid:
                 button_name = "{}_controller_button".format(arm)
@@ -316,7 +326,6 @@ class SimulatorNicoVR(SimulatorVR):
                 #     delta_trig_frac_right = delta_trig_frac
 
             else:
-                # Use the last trigger fraction if no valid input was received from controller.
                 delta_trig_frac = 0
 
                 current_trig_frac_right = 0
