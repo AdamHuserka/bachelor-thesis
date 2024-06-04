@@ -4,18 +4,30 @@ robot:
   action_type: continuous
   action_normalize: true
   proprio_obs:
-    - eef_left_pos
-    - eef_left_quat
-    - eef_right_pos
-    - eef_right_quat
-    - arm_left_qpos_sin
-    - arm_left_qpos_cos
-    - gripper_left_qpos
+
+    - arm_right_qpos
     - arm_right_qpos_sin
     - arm_right_qpos_cos
+    - arm_right_qvel
+    - eef_right_pos_global
+    - eef_right_quat_global
+    - eef_right_pos
+    - eef_right_quat
     - gripper_right_qpos
-    - grasp_left
+    - gripper_right_qvel
     - grasp_right
+
+    - arm_left_qpos
+    - arm_left_qpos_sin
+    - arm_left_qpos_cos
+    - arm_left_qvel
+    - eef_left_pos_global
+    - eef_left_quat_global
+    - eef_left_pos
+    - eef_left_quat
+    - gripper_left_qpos
+    - gripper_left_qvel
+    - grasp_left
   reset_joint_pos: null
   base_name: null
   scale: 1.0

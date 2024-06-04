@@ -75,10 +75,10 @@ class SimulatorNicoVR(SimulatorVR):
             use_pb_gui,
         )
 
-        self.debug = False
+        self.debug = True
         self.log_writes = 1000
         if self.debug:
-            self.log = open("C:\\Users\\huser\\teleop_log.txt", "a")
+            self.log = open("C:\\Users\\huser\\teleop_log.txt", "w")
 
         self.writing_time = time.time()
 
@@ -213,6 +213,9 @@ class SimulatorNicoVR(SimulatorVR):
         if not self.vr_data_available:
             print("Sending empty action")
             return action
+        
+        if self.debug:
+            written = False
 
         # Get VrData for the current frame
         v = self.gen_vr_data()
@@ -227,45 +230,39 @@ class SimulatorNicoVR(SimulatorVR):
             controller_name = "camera"
             action[self.main_vr_robot.controller_action_idx[controller_name]] = np.array([z, y])
 
-        #VR parts
-        # vr_parts = {"right" : self.main_vr_robot.eef_links["right"], "left" : self.main_vr_robot.eef_links["left"]}
-
+        # Reset robot
         reset = self.get_action_button_state("right_controller", "reset_agent", v) or self.get_action_button_state("left_controller", "reset_agent", v)
         if reset:
-            print("RESETTING AGENT")
             self.main_vr_robot.reset()
             self.main_vr_robot.keep_still()
-            # robot_id = self.main_vr_robot.get_body_ids()[0]
-            # for arm in self.main_vr_robot.arm_names:
-            #     arm_idx = self.main_vr_robot.arm_control_idx[arm]
-            #     set_joint_positions(robot_id, arm_idx, self.main_vr_robot.default_joint_pos[arm_idx])
-            # return action
 
         for arm in self.main_vr_robot.arm_names:
-            controller_name = "right_controller" if arm == "right" else "left_controller"
+            vr_controller_name = "right_controller" if arm == "right" else "left_controller"
 
             # Query the world position and orientation of the @controller_name
-            valid, controller_pos, controller_orn = v.query(controller_name)[:3]
-            if self.get_action_button_state(controller_name, "teleop_toggle", v):
-                # print(controller_name)
+            valid, vr_controller_pos, vr_controller_orn = v.query(vr_controller_name)[:3]
+            if self.get_action_button_state(vr_controller_name, "teleop_toggle", v):
                 # Keep in same world position as last frame if controller/tracker data is not valid
                 if not valid:
                     continue
+
                 #Get the robot base link position and rotation
-                robot_pos, robot_orn = robot_body.get_position_orientation() 
+                robot_pos, robot_orn = robot_body.get_position_orientation()
+
+                # Reset the original positions of the robot's arm and the corresponding VR controller
                 if self.reset_origin[arm]:
                     self.robot_origin[arm] = {"pos": robot_pos, "quat": robot_orn}
-                    self.vr_origin[arm] = {"pos": controller_pos, "quat": controller_orn}
+                    self.vr_origin[arm] = {"pos": vr_controller_pos, "quat": vr_controller_orn}
                     self.reset_origin[arm] = False
 
                 # Calculate Positional Action
                 robot_pos_offset = np.array(robot_pos) - np.array(self.robot_origin[arm]["pos"])
-                target_pos_offset = np.array(controller_pos) - np.array(self.vr_origin[arm]["pos"])
+                target_pos_offset = np.array(vr_controller_pos) - np.array(self.vr_origin[arm]["pos"])
                 pos_action = target_pos_offset - robot_pos_offset
 
                 # Calculate Euler Action
                 robot_quat_offset = self.quat_diff(robot_orn, self.robot_origin[arm]["quat"])
-                target_quat_offset = self.quat_diff(controller_orn, self.vr_origin[arm]["quat"])
+                target_quat_offset = self.quat_diff(vr_controller_orn, self.vr_origin[arm]["quat"])
                 quat_action = self.quat_diff(target_quat_offset, robot_quat_offset)
                 euler_action = self.quat_to_euler(quat_action)
 
@@ -273,22 +270,6 @@ class SimulatorNicoVR(SimulatorVR):
 
                 controller = "arm_" + arm
                 action[self.main_vr_robot.controller_action_idx[controller]] = delta_action
-
-                if self.debug:
-                    print()
-                    if self.log_writes > 0:
-                        print("WRITING LOG")
-                        if arm == "left":
-                            self.log.writelines("Write time diff:" + str(time.time() - self.writing_time) + "\n")
-                            self.writing_time = time.time()
-                            self.log.writelines("Pos action:" + str(pos_action) + "\n")
-                            self.log.writelines("Euler action:" + str(euler_action) + "\n")
-                            #self.log.writelines("Active controller:" + str(controller_name) + "\n")
-                            self.log.writelines("\n")
-                        self.log_writes -= 1
-                    else:
-                        self.log.close()
-                        self.debug = False
             else:
                 self.reset_origin[arm] = True
 
@@ -303,41 +284,60 @@ class SimulatorNicoVR(SimulatorVR):
             if valid:
                 button_name = "{}_controller_button".format(arm)
                 trig_frac = v.query(button_name)[0]
-                if arm == "left":
-                    #current_trig_frac = 1 - current_trig_frac
-                    current_trig_frac = (np.max(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
-                    delta_trig_frac = current_trig_frac - trig_frac
-                else:
+                if arm == "right":
                     current_trig_frac = 1 - (np.min(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
-                    delta_trig_frac = trig_frac - current_trig_frac
+                else:
+                    current_trig_frac = (np.max(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
+                delta_trig_frac = trig_frac - current_trig_frac
 
-                # if arm == "left":
-                #     print("robot normalized LEFT finger joint pos:", self.main_vr_robot.joint_positions_normalized[fingers])
-                #     print("robot_trig_frac not inversed LEFT:", 1 - current_trig_frac, "VS RIGHT:", 1 - current_trig_frac_right)
-                #     print("robot fingers trig fraction:", current_trig_frac, "VS RIGHT:", current_trig_frac_right)
-                #     print("Controller Trig fraction:", trig_frac, "VS RIGHT:", trig_frac_right)
-                #     print("Deltra grasp:", delta_trig_frac, "VS RIGHT:", delta_trig_frac_right)
-                #     print()        
-                # else:
-                #     print("robot normalized RIGHT finger joint pos:", self.main_vr_robot.joint_positions_normalized[fingers])
-                #     print()
-                #     current_trig_frac_right = current_trig_frac
-                #     trig_frac_right = trig_frac
-                #     delta_trig_frac_right = delta_trig_frac
+                # DEBUG
+                # if self.debug:
+                #     if arm == "right" and False:
+                #         self.log.writelines("*" * 80 + "\n")
+                #         controller = "gripper_right"
+                #         self.log.writelines("gripper_right action:" + str(delta_trig_frac) + "\n")
+                #         self.log.writelines("RIGHT current_trig_frac:" + str(current_trig_frac) + "\n")
+                #     elif arm == "left":
+                #         self.log.writelines("-" * 80 + "\n")
+                #         controller = "gripper_left"
+                #         self.log.writelines("LEFT controller trigger:" + str(trig_frac) + "\n")
+                #         self.log.writelines("LEFT current_trig_frac:" + str(current_trig_frac) + "\n")
+                #         self.log.writelines("gripper_left action:" + str(delta_trig_frac) + "\n")
 
+                #     written = True
             else:
                 delta_trig_frac = 0
-
-                current_trig_frac_right = 0
-                trig_frac_right = 0
-                delta_trig_frac_right = 0
-
             grip_controller_name = "gripper_" + arm
-
             action[self.main_vr_robot.controller_action_idx[grip_controller_name]] = delta_trig_frac
-            # if arm == "left":
-            #     print("Whole action", action)
-            #     print()
-            #print("Right grasp controller idx:", self.main_vr_robot.controller_action_idx[grip_controller_name])
+
+        if self.debug and False:
+            # self.log.writelines("Whole action:" + str(action) + "\n")
+            # controller = "camera"
+            # self.log.writelines("Camera action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
+            # controller = "arm_right"
+            # self.log.writelines("right_controller action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
+            self.log.writelines("*" * 80 + "\n")
+            controller = "gripper_right"
+            self.log.writelines("gripper_right action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
+            fingers = fingers = self.main_vr_robot.gripper_control_idx["right"]
+            current_trig_frac = 1 - (np.min(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
+            self.log.writelines("RIGHT current_trig_frac:" + str(current_trig_frac) + "\n")
+            # controller = "arm_left"
+            # self.log.writelines("left_controller action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
+            self.log.writelines("-" * 80 + "\n")
+            controller = "gripper_left"
+            self.log.writelines("gripper_left action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
+            fingers = fingers = self.main_vr_robot.gripper_control_idx["left"]
+            current_trig_frac = 1 - (np.min(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
+            self.log.writelines("LEFT current_trig_frac:" + str(current_trig_frac) + "\n")
+
+            written = True
+
+        if self.debug:
+            if written:
+                self.log_writes -= 1
+            if self.log_writes <= 0:
+                self.log.close()
+                self.debug = False
 
         return action

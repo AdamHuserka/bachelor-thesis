@@ -6,15 +6,13 @@ import pybullet as p
 import igibson
 from igibson.controllers import ControlType
 from igibson.robots.active_camera_robot import ActiveCameraRobot
-from igibson.robots.manipulation_robot import GraspingPoint, ManipulationRobot
-from igibson.utils.constants import SemanticClass
-from igibson.utils.python_utils import assert_valid_key
+from igibson.robots.manipulation_robot import GraspingPoint, ManipulationRobot, ASSIST_ACTIVATION_THRESHOLD, CONSTRAINT_VIOLATION_THRESHOLD
+from igibson.external.pybullet_tools.utils import get_constraint_violation
 
-#THUMB_2_POS = np.array([0, -0.02, -0.05])
-#THUMB_1_POS = np.array([0, -0.015, -0.02])
-PALM_CENTER_POS = np.array([ 0.035,   0.00,   0.00])
 PALM_BASE_POS = np.array([ 0.025,   0.00,   0.00])
+PALM_CENTER_POS = np.array([ 0.035,   0.00,   0.00])
 FINGER_TIP_POS = np.array([0.05, 0, 0])
+#THUMB_TIP_POS = np.array([0.0353, 0.0353, 0.02])
 
 class Nico(ManipulationRobot, ActiveCameraRobot):
     """
@@ -81,16 +79,6 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
         for arm in self.arm_names:
             controllers["arm_{}".format(arm)] = "InverseKinematicsController"
             controllers["gripper_{}".format(arm)] = "JointController"
-        # print("*"*100)
-        # print("Default controllers", controllers)
-        # print("*"*100)
-        # try:
-        #     print("Printing names and data of controllers")
-        #     for name, controller in controllers.items():
-        #         print(name,":", controller)#, "controller dim", controller.command_dim)
-        # except Exception as e:
-        #     print("Nah, I'd continue without printing")
-        #     print("EXCEPTION:", e)
 
         return controllers
     
@@ -102,10 +90,11 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
         """
         # Always run super method first
         cfg = super()._default_camera_joint_controller_config
-
+        joint_lower_limits, joint_upper_limits = self.control_limits["position"][0][self.camera_control_idx], self.control_limits["position"][1][self.camera_control_idx]
+        ranges = joint_upper_limits - joint_lower_limits
+        output_ranges = (-ranges, ranges)
         cfg["motor_type"] = "position"
-        cfg["compute_delta_in_quat_space"] = [(3, 4, 5)]
-        cfg["command_output_limits"] = None
+        cfg["command_output_limits"] = output_ranges
 
         return cfg
     
@@ -125,7 +114,7 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
                 {
                     "motor_type": "position",
                     "parallel_mode": True,
-                    "inverted": True,
+                    "inverted": True if arm == "right" else False,
                     "command_input_limits": (0, 1),
                     "command_output_limits": output_ranges,
                     "use_delta_commands": True,
@@ -155,6 +144,90 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
             }
         )
         return controllers
+
+    # override
+    def _handle_assisted_grasping(self, control, control_type):
+        """
+        Handles assisted grasping.
+
+        :param control: Array[float], raw control signals that are about to be sent to the robot's joints
+        :param control_type: Array[ControlType], control types for each joint
+        """
+        # Loop over all arms
+        for arm in self.arm_names:
+            joint_idxes = self.gripper_control_idx[arm]
+            current_positions = self.joint_positions[joint_idxes]
+            assert np.all(
+                control_type[joint_idxes] == ControlType.POSITION
+            ), "Assisted grasping only works with position control."
+            desired_positions = control[joint_idxes] * (-1 if arm == "left" else 1)
+            if arm == "left":
+                print("*"*80)
+                print("Incoming desired position:", control[joint_idxes])
+                print("Converted desired position:", desired_positions)
+                print()
+            activation_thresholds = (
+                (1 - ASSIST_ACTIVATION_THRESHOLD) * self.joint_lower_limits
+                + ASSIST_ACTIVATION_THRESHOLD * self.joint_upper_limits
+            )[joint_idxes] * (-1 if arm == "left" else 1)
+
+            # We will clip the current positions just near the limits of the joint. This is necessary because the
+            # desired joint positions can never reach the unclipped current positions when the current positions
+            # are outside the joint limits, since the desired positions are clipped in the controller.
+            if arm == "right":
+                clipped_current_positions = np.clip(
+                    current_positions,
+                    self.joint_lower_limits[joint_idxes] + 1e-3,
+                    self.joint_upper_limits[joint_idxes] - 1e-3,
+                )
+            else:
+                clipped_current_positions = np.clip(
+                    current_positions * -1,
+                    (self.joint_upper_limits[joint_idxes] - 1e-3) * -1,
+                    self.joint_lower_limits[joint_idxes] - 1e-3,
+                )
+            if arm == "left":
+                print("incoming activation tresholds:", (
+                (1 - ASSIST_ACTIVATION_THRESHOLD) * self.joint_lower_limits
+                + ASSIST_ACTIVATION_THRESHOLD * self.joint_upper_limits
+            )[joint_idxes])
+                print("Converted activation tresholds:", activation_thresholds)
+                print()
+                print("incoming clipped current positions:", np.clip(
+                    current_positions,
+                    self.joint_lower_limits[joint_idxes] + 1e-3,
+                    self.joint_upper_limits[joint_idxes] - 1e-3,
+                ))
+                print("Converted clipped current positions:", clipped_current_positions)
+                print()
+            if self._ag_obj_in_hand[arm] is None:
+                # We are not currently assisted-grasping an object and are eligible to start.
+                # We activate if the desired joint position is above the activation threshold, regardless of whether or
+                # not the desired position is achieved e.g. due to collisions with the target object. This allows AG to
+                # work with large objects.
+                if np.any(desired_positions < activation_thresholds):
+                    self._ag_data[arm] = self._calculate_in_hand_object(arm=arm)
+                    self._establish_grasp(arm=arm, ag_data=self._ag_data[arm])
+
+            # Otherwise, decide if we will release the object.
+            else:
+                # If we are not already in the process of releasing, decide if we want to start.
+                # We should release an object in two cases: if the constraint is violated, or if the desired hand
+                # position in this frame is more open than both the threshold and the previous current hand position.
+                # This allows us to keep grasping in cases where the hand was frozen in a too-open position
+                # possibly due to the grasped object being large.
+                if self._ag_release_counter[arm] is None:
+                    constraint_violated = (
+                        get_constraint_violation(self._ag_obj_cid[arm]) > CONSTRAINT_VIOLATION_THRESHOLD
+                    )
+                    thresholds = np.maximum(clipped_current_positions, activation_thresholds)
+                    releasing_grasp = np.all(desired_positions > thresholds)
+                    if constraint_violated or releasing_grasp:
+                        self._release_grasp(arm=arm)
+
+                # Otherwise, if we are already in the release window, continue releasing.
+                else:
+                    self._handle_release_window(arm=arm)
 
 
     @property
@@ -224,24 +297,19 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
 
     @property
     def assisted_grasp_start_points(self):
-        side_coefficients = {"left_hand": np.array([-1, -1, 1]), "right_hand": np.array([1, 1, 1])}
+        side_coefficients = {"left_hand": np.array([1, -1, 1]), "right_hand": np.array([1, 1, 1])}
         return {
             arm: [
                 GraspingPoint(link_name="%s_palm" % arm, position=PALM_BASE_POS),
                 GraspingPoint(link_name="%s_palm" % arm, position=PALM_CENTER_POS * side_coefficients[arm]),
-                # GraspingPoint(
-                #     link_name="%s_%s" % (arm, THUMB_LINK_NAME), position=THUMB_1_POS * side_coefficients[arm]
-                # ),
-                # GraspingPoint(
-                #     link_name="%s_%s" % (arm, THUMB_LINK_NAME), position=THUMB_2_POS * side_coefficients[arm]
-                # ),
+                #GraspingPoint(link_name="%s_palm" % arm, position=(PALM_CENTER_POS + THUMB_TIP_POS) * side_coefficients[arm]),
             ]
             for arm in self.arm_names
         }
 
     @property
     def assisted_grasp_end_points(self):
-        side_coefficients = {"left_hand": np.array([-1, -1, 1]), "right_hand": np.array([1, 1, 1])}
+        side_coefficients = {"left_hand": np.array([1, -1, 1]), "right_hand": np.array([1, 1, 1])}
         return {
             arm: [
                 GraspingPoint(link_name="%s" % finger, position=FINGER_TIP_POS * side_coefficients[arm])
@@ -276,17 +344,42 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
     @property
     def disabled_collision_pairs(self):
         return [
-            # ["grippel", "littlefingel"],
-            # ["middlefingel", "grippel"],
-            # ["middlefingel", "littlefingel"],
-            # ["left_palm", "grippel"],
-            # ["left_palm", "middlefingel"],
-            # ["left_palm", "littlefingel"],
-            # ["left_palm", "left_wrist"],
-            # ["left_wrist", "left_lower_arm"],
-            # ["left_lower_arm", "left_upper_arm"],
-            # ["left_upper_arm", "left_collarbone"],
-            # ["left_collarbone", "left_shoulder"],
+            ["head", "neck"],
+            ["head", "right_shoulder"],
+            ["head", "right_collarbone"],
+            ["head", "right_upper_arm"],
+            ["neck", "right_shoulder"],
+            ["neck", "right_collarbone"],
+            ["neck", "right_upper_arm"],
+            ["gripper", "littlefinger"],
+            ["middlefinger", "gripper"],
+            ["middlefinger", "littlefinger"],
+            ["right_palm", "gripper"],
+            ["right_palm", "middlefinger"],
+            ["right_palm", "littlefinger"],
+            ["right_palm", "right_wrist"],
+            ["right_wrist", "right_lower_arm"],
+            ["right_lower_arm", "right_upper_arm"],
+            ["right_upper_arm", "right_collarbone"],
+            ["right_collarbone", "right_shoulder"],
+
+            ["head", "left_shoulder"],
+            ["head", "left_collarbone"],
+            ["head", "left_upper_arm"],
+            ["neck", "left_shoulder"],
+            ["neck", "left_collarbone"],
+            ["neck", "left_upper_arm"],
+            ["grippel", "littlefingel"],
+            ["middlefingel", "grippel"],
+            ["middlefingel", "littlefingel"],
+            ["left_palm", "grippel"],
+            ["left_palm", "middlefingel"],
+            ["left_palm", "littlefingel"],
+            ["left_palm", "left_wrist"],
+            ["left_wrist", "left_lower_arm"],
+            ["left_lower_arm", "left_upper_arm"],
+            ["left_upper_arm", "left_collarbone"],
+            ["left_collarbone", "left_shoulder"],
             ]
     
     @property
@@ -307,4 +400,6 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
 
     @property
     def model_file(self):
+        #return os.path.join(igibson.assets_path, "models/nico/nico_upper_head_rhd6_dual_std_meshes.urdf") #nico_upper_head_rhd6_dual_std_meshes.urdf, nico_upper_head_rh6d_dual.urdf
+        #return os.path.join(igibson.assets_path, "models/nico/nico_upper_head_rh6d_dual_color_test.urdf")
         return os.path.join(igibson.assets_path, "models/nico/nico_upper_head_rh6d_dual.urdf")
