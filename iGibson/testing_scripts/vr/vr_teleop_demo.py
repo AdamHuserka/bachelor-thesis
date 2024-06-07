@@ -1,5 +1,5 @@
-""" This is a VR demo in a simple scene consisting of some objects to interact with, and space to move around.
-Can be used to verify everything is working in VR, and iterate on current VR designs.
+""" This is a robot NICO teleoperation demo in a simple scene featuring an interactive object and open space for movement. 
+It serves as a training environment for new operators to familiarize themselves with the teleoperation controls.
 """
 import logging
 import os
@@ -48,18 +48,7 @@ def main(selection="user", headless=False, short_exec=False):
     s.import_scene(scene)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
-    obj = ArticulatedObject(
-        os.path.join(
-            igibson.ig_dataset_path,
-            "objects",
-            "basket",
-            "e3bae8da192ab3d4a17ae19fa77775ff",
-            "e3bae8da192ab3d4a17ae19fa77775ff.urdf",
-        ),
-        scale=1.1,
-    )
-    s.import_object(obj)
-    obj.set_position_orientation([0.85, 0.00000, 1.0], [0, 0, 1, 1])
+    
 
     objects = [
         ("table/table.urdf", (1.000000, -0.200000, 0.000000), (0.000000, 0.000000, 0.707107, 0.707107)),
@@ -68,9 +57,9 @@ def main(selection="user", headless=False, short_exec=False):
         ("jenga/jenga.urdf", (1.100000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
         ("jenga/jenga.urdf", (1.000000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
         ("jenga/jenga.urdf", (0.900000, -0.700000, 0.750000), (0.000000, 0.707107, 0.000000, 0.707107)),
-        ("jenga/jenga.urdf", (0.650000, -0.100000, 1.000000), (0.000000, 0.707107, 0.000000, 0.707107)),
+        ("jenga/jenga.urdf", (0.650000, -0.100000, 1), (0.000000, 0.707107, 0.000000, 0.707107)),
         ("duck_vhacd.urdf", (1.050000, -0.500000, 0.700000), (0.000000, 0.000000, 0.707107, 0.707107)),
-        ("duck_vhacd.urdf", (0.650000, 0.200000, 0.700000), (0.000000, 0.000000, 0.707107, 0.707107)),
+        #("duck_vhacd.urdf", (0.950000, -0.100000, 0.700000), (0.000000, 0.000000, 0.707107, 0.707107)),
         #("sphere_small.urdf", (0.650000, -0.400000, 0.700000), (0.000000, 0.000000, 0.707107, 0.707107)),
         #("duck_vhacd.urdf", (0.650000, -0.400000, 1.00000), (0.000000, 0.000000, 0.707107, 0.707107)),
     ]
@@ -84,6 +73,19 @@ def main(selection="user", headless=False, short_exec=False):
         item_ob.set_position(pos)
         item_ob.set_orientation(orn)
 
+    obj = ArticulatedObject(
+        os.path.join(
+            igibson.ig_dataset_path,
+            "objects",
+            "basket",
+            "e3bae8da192ab3d4a17ae19fa77775ff",
+            "e3bae8da192ab3d4a17ae19fa77775ff.urdf",
+        ),
+        scale=1,
+    )
+    s.import_object(obj)
+    obj.set_position_orientation([0.85, 0.00000, 1.0], [0, 0, 1, 1])
+
     config = parse_config(os.path.join(igibson.configs_path, "robots", "nico.yaml"))
     nico = Nico(**config["robot"])
     s.import_object(nico)
@@ -95,7 +97,6 @@ def main(selection="user", headless=False, short_exec=False):
         s.step()
 
         event_data = s.get_vr_events()
-        # print(event_data)
         if event_data:
             print("----- Next set of event data (on current frame): -----")
             for event in event_data:
@@ -104,11 +105,6 @@ def main(selection="user", headless=False, short_exec=False):
             print("------------------------------------------------------")
 
         nico.apply_action(s.gen_vr_robot_action())
-
-        # End demo by pressing overlay toggle
-        #if s.query_vr_event("left_controller", "overlay_toggle"):
-        #    print("PRESSED THE BUTTON, ENDING THE SIMULATION")
-        #    break
 
     s.disconnect()
 

@@ -1,27 +1,17 @@
-import ctypes
 import logging
-import platform
-import time
-from time import sleep
 
 import numpy as np
 import pybullet as p
 
 from igibson.render.mesh_renderer.mesh_renderer_settings import MeshRendererSettings
-from igibson.render.mesh_renderer.mesh_renderer_vr import MeshRendererVR, VrSettings
-from igibson.render.viewer import ViewerVR
-from igibson.robots.behavior_robot import BODY_ANGULAR_VELOCITY, BODY_LINEAR_VELOCITY, HAND_BASE_ROTS
+from igibson.render.mesh_renderer.mesh_renderer_vr import VrSettings
+from igibson.robots.behavior_robot import HAND_BASE_ROTS
 from igibson.robots.manipulation_robot import IsGraspingState
-from igibson.robots.robot_base import BaseRobot
 from igibson.simulator_vr import SimulatorVR
-from igibson.utils.vr_utils import VR_CONTROLLERS, VR_DEVICES, VrData, calc_offset, calc_z_rot_from_right
+from igibson.utils.vr_utils import VR_CONTROLLERS, VR_DEVICES, VrData, calc_offset
 from igibson.utils.transform_utils import quat2mat, mat2quat, matrix_inverse, mat2euler
-from igibson.external.pybullet_tools.utils import set_joint_positions
 
 log = logging.getLogger(__name__)
-
-ATTACHMENT_BUTTON_TIME_THRESHOLD = 1  # second
-
 
 class SimulatorNicoVR(SimulatorVR):
     """
@@ -74,13 +64,6 @@ class SimulatorNicoVR(SimulatorVR):
             vr_settings,
             use_pb_gui,
         )
-
-        self.debug = True
-        self.log_writes = 1000
-        if self.debug:
-            self.log = open("C:\\Users\\huser\\teleop_log.txt", "w")
-
-        self.writing_time = time.time()
 
         self.robot_origin = {'right': None, 'left': None}
         self.vr_origin = {'right': None, 'left': None}
@@ -166,15 +149,15 @@ class SimulatorNicoVR(SimulatorVR):
             if device in VR_CONTROLLERS:
                 v["{}_button".format(device)] = self.get_button_data_for_controller(device)
 
-        # Store final rotations of hands, with model rotation applied
-        # for hand in ["right", "left"]:
-        #     # Base rotation quaternion
-        #     base_rot = HAND_BASE_ROTS[hand]
-        #     # Raw rotation of controller
-        #     controller_rot = v["{}_controller".format(hand)][2]
-        #     # Use dummy translation to calculation final rotation
-        #     final_rot = p.multiplyTransforms([0, 0, 0], controller_rot, [0, 0, 0], base_rot)[1]
-        #     v["{}_controller".format(hand)].append(final_rot)
+        #Store final rotations of hands, with model rotation applied
+        for hand in ["right", "left"]:
+            # Base rotation quaternion
+            base_rot = HAND_BASE_ROTS[hand]
+            # Raw rotation of controller
+            controller_rot = v["{}_controller".format(hand)][2]
+            # Use dummy translation to calculation final rotation
+            final_rot = p.multiplyTransforms([0, 0, 0], controller_rot, [0, 0, 0], base_rot)[1]
+            v["{}_controller".format(hand)].append(final_rot)
 
         v["event_data"] = self.get_vr_events()
         reset_actions = []
@@ -213,17 +196,15 @@ class SimulatorNicoVR(SimulatorVR):
         if not self.vr_data_available:
             print("Sending empty action")
             return action
-        
-        if self.debug:
-            written = False
 
         # Get VrData for the current frame
         v = self.gen_vr_data()
 
-        # Update body action space
+        # Get HMD data
         hmd_is_valid, hmd_pos, hmd_orn, hmd_r = v.query("hmd")[:4]
         robot_body = self.main_vr_robot.base_link
         
+        # Set head and neck joint position
         if hmd_is_valid:
             y = hmd_orn[1]
             z = hmd_orn[2]
@@ -237,10 +218,12 @@ class SimulatorNicoVR(SimulatorVR):
             self.main_vr_robot.keep_still()
 
         for arm in self.main_vr_robot.arm_names:
+
             vr_controller_name = "right_controller" if arm == "right" else "left_controller"
 
-            # Query the world position and orientation of the @controller_name
+            #  
             valid, vr_controller_pos, vr_controller_orn = v.query(vr_controller_name)[:3]
+
             if self.get_action_button_state(vr_controller_name, "teleop_toggle", v):
                 # Keep in same world position as last frame if controller/tracker data is not valid
                 if not valid:
@@ -273,14 +256,10 @@ class SimulatorNicoVR(SimulatorVR):
             else:
                 self.reset_origin[arm] = True
 
-            #gripper
+            # Gripper
             fingers = self.main_vr_robot.gripper_control_idx[arm]
 
             # The normalized joint positions are inverted and scaled to the (0, 1) range to match VR controller.
-            # Note that we take the minimum (e.g. the most-grasped) finger - this means if the user releases the
-            # trigger, *all* of the fingers are guaranteed to move to the released position.
-            
-
             if valid:
                 button_name = "{}_controller_button".format(arm)
                 trig_frac = v.query(button_name)[0]
@@ -289,55 +268,10 @@ class SimulatorNicoVR(SimulatorVR):
                 else:
                     current_trig_frac = (np.max(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
                 delta_trig_frac = trig_frac - current_trig_frac
-
-                # DEBUG
-                # if self.debug:
-                #     if arm == "right" and False:
-                #         self.log.writelines("*" * 80 + "\n")
-                #         controller = "gripper_right"
-                #         self.log.writelines("gripper_right action:" + str(delta_trig_frac) + "\n")
-                #         self.log.writelines("RIGHT current_trig_frac:" + str(current_trig_frac) + "\n")
-                #     elif arm == "left":
-                #         self.log.writelines("-" * 80 + "\n")
-                #         controller = "gripper_left"
-                #         self.log.writelines("LEFT controller trigger:" + str(trig_frac) + "\n")
-                #         self.log.writelines("LEFT current_trig_frac:" + str(current_trig_frac) + "\n")
-                #         self.log.writelines("gripper_left action:" + str(delta_trig_frac) + "\n")
-
-                #     written = True
             else:
                 delta_trig_frac = 0
+
             grip_controller_name = "gripper_" + arm
             action[self.main_vr_robot.controller_action_idx[grip_controller_name]] = delta_trig_frac
-
-        if self.debug and False:
-            # self.log.writelines("Whole action:" + str(action) + "\n")
-            # controller = "camera"
-            # self.log.writelines("Camera action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
-            # controller = "arm_right"
-            # self.log.writelines("right_controller action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
-            self.log.writelines("*" * 80 + "\n")
-            controller = "gripper_right"
-            self.log.writelines("gripper_right action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
-            fingers = fingers = self.main_vr_robot.gripper_control_idx["right"]
-            current_trig_frac = 1 - (np.min(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
-            self.log.writelines("RIGHT current_trig_frac:" + str(current_trig_frac) + "\n")
-            # controller = "arm_left"
-            # self.log.writelines("left_controller action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
-            self.log.writelines("-" * 80 + "\n")
-            controller = "gripper_left"
-            self.log.writelines("gripper_left action:" + str(action[self.main_vr_robot.controller_action_idx[controller]]) + "\n")
-            fingers = fingers = self.main_vr_robot.gripper_control_idx["left"]
-            current_trig_frac = 1 - (np.min(self.main_vr_robot.joint_positions_normalized[fingers]) + 1) / 2
-            self.log.writelines("LEFT current_trig_frac:" + str(current_trig_frac) + "\n")
-
-            written = True
-
-        if self.debug:
-            if written:
-                self.log_writes -= 1
-            if self.log_writes <= 0:
-                self.log.close()
-                self.debug = False
 
         return action

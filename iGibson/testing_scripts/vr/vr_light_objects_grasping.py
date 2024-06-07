@@ -1,5 +1,5 @@
-""" This is a VR demo in a simple scene consisting of some objects to interact with, and space to move around.
-Can be used to verify everything is working in VR, and iterate on current VR designs.
+""" This is a robot NICO teleoperation in a simple scene featuring interactive lightweight objects and open space for movement. 
+It serves as a testing environment for the robot teleoperation.
 """
 import logging
 import os
@@ -99,7 +99,6 @@ def main(selection="user", headless=False, short_exec=False):
         s.step()
 
         event_data = s.get_vr_events()
-        # print(event_data)
         if event_data:
             print("----- Next set of event data (on current frame): -----")
             for event in event_data:
@@ -108,11 +107,6 @@ def main(selection="user", headless=False, short_exec=False):
             print("------------------------------------------------------")
 
         nico.apply_action(s.gen_vr_robot_action())
-
-        # End demo by pressing overlay toggle
-        #if s.query_vr_event("left_controller", "overlay_toggle"):
-        #    print("PRESSED THE BUTTON, ENDING THE SIMULATION")
-        #    break
 
     s.disconnect()
 
