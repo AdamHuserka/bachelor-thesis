@@ -15,3 +15,5 @@ We are using modified nico_upper_head_rh6d_dual.urdf file. You can find all NICO
 Meshes need to be also in the .OBJ format as iGibson cannot parse shapes from the .STL format.
 
 Testing scripts can be found in the testing_scripts directory.
+
+Videos of VR interface testing are available here: https://drive.google.com/drive/folders/1wqkMHBp6a9BC3PO3sU1XBkxSYSn03sPI?usp=sharing
