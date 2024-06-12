@@ -324,7 +324,7 @@ class Nico(ManipulationRobot, ActiveCameraRobot):
             # ["head", "right_shoulder"],
             # ["head", "right_collarbone"],
             # ["head", "right_upper_arm"],
-            # ["neck", "right_shoulder"],
+              ["neck", "right_shoulder"],
             # ["neck", "right_collarbone"],
             # ["neck", "right_upper_arm"],
             # ["gripper", "littlefinger"],
